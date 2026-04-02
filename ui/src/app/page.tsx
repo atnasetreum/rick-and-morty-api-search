@@ -2,8 +2,15 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FiChevronDown, FiChevronUp, FiHeart, FiSearch } from "react-icons/fi";
 import {
+  FiChevronDown,
+  FiChevronUp,
+  FiHeart,
+  FiSearch,
+  FiTrash2,
+} from "react-icons/fi";
+import {
+  getCharacter as getCharacterFromClient,
   getCharacters as getCharactersFromClient,
   type Character as ApiCharacter,
   type Info,
@@ -49,8 +56,12 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
+  const [favoriteCharacters, setFavoriteCharacters] = useState<Character[]>([]);
   const favorites = useAppSelector(selectFavoriteIds);
   const characterGridRef = useRef<HTMLUListElement | null>(null);
+  const favoritesButtonRef = useRef<HTMLButtonElement | null>(null);
+  const favoritesDropdownRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     dispatch(loadFavoritesRequest());
@@ -100,6 +111,71 @@ export default function Home() {
     }
   }, [characters, selected]);
 
+  useEffect(() => {
+    const loadFavoriteCharacters = async () => {
+      if (!favorites.length) {
+        setFavoriteCharacters([]);
+        return;
+      }
+
+      try {
+        const response = await getCharacterFromClient(
+          favorites.length === 1 ? favorites[0] : favorites,
+        );
+
+        if (response.status < 200 || response.status >= 300) {
+          setFavoriteCharacters([]);
+          return;
+        }
+
+        const payload = response.data as Character | Character[];
+        const list = Array.isArray(payload) ? payload : [payload];
+        const ordered = favorites
+          .map((favoriteId) =>
+            list.find((character) => character.id === favoriteId),
+          )
+          .filter((character): character is Character => Boolean(character));
+
+        setFavoriteCharacters(ordered);
+      } catch {
+        setFavoriteCharacters([]);
+      }
+    };
+
+    void loadFavoriteCharacters();
+  }, [favorites]);
+
+  useEffect(() => {
+    if (!isFavoritesOpen) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+
+      if (!target) {
+        return;
+      }
+
+      const clickedInsideDropdown =
+        favoritesDropdownRef.current?.contains(target) ?? false;
+      const clickedToggleButton =
+        favoritesButtonRef.current?.contains(target) ?? false;
+
+      if (!clickedInsideDropdown && !clickedToggleButton) {
+        setIsFavoritesOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [isFavoritesOpen]);
+
   const toggleFavorite = (characterId: number) => {
     dispatch(toggleFavoriteRequest(characterId));
   };
@@ -116,16 +192,13 @@ export default function Home() {
   };
 
   const { statusBadgeText, isDeadStatus } = useMemo(() => {
-    const badgeText =
-      selected?.status === "Dead"
-        ? "DEAD"
-        : selected?.status === "Alive"
-          ? "LIVE"
-          : "UNKNOWN";
+    const normalizedStatus = selected?.status?.toLowerCase();
+    const isDead = normalizedStatus === "dead";
+    const badgeText = isDead ? "MUERTO" : "VIVO";
 
     return {
       statusBadgeText: badgeText,
-      isDeadStatus: badgeText === "DEAD",
+      isDeadStatus: isDead,
     };
   }, [selected?.status]);
 
@@ -267,9 +340,40 @@ export default function Home() {
                 <FiChevronDown aria-hidden="true" />
               </button>
 
-              <button type="button" className={styles.favsButton}>
+              <button
+                type="button"
+                className={styles.favsButton}
+                ref={favoritesButtonRef}
+                onClick={() => setIsFavoritesOpen((current) => !current)}
+              >
                 FAVS
               </button>
+
+              {isFavoritesOpen ? (
+                <div className={styles.favsDropdown} ref={favoritesDropdownRef}>
+                  <ul className={styles.favsList}>
+                    {favoriteCharacters.length ? (
+                      favoriteCharacters.map((character) => (
+                        <li key={character.id} className={styles.favsItem}>
+                          <span className={styles.favsItemName}>
+                            {character.name.toUpperCase()}
+                          </span>
+                          <button
+                            type="button"
+                            className={styles.favsRemoveButton}
+                            onClick={() => toggleFavorite(character.id)}
+                            aria-label={`Quitar a ${character.name} de favoritos`}
+                          >
+                            <FiTrash2 aria-hidden="true" />
+                          </button>
+                        </li>
+                      ))
+                    ) : (
+                      <li className={styles.favsItem}>SIN FAVORITOS</li>
+                    )}
+                  </ul>
+                </div>
+              ) : null}
             </>
           ) : null}
         </aside>

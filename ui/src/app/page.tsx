@@ -11,6 +11,9 @@ import {
 import styles from "./page.module.css";
 
 type Character = ApiCharacter;
+type FavoriteRecord = { id: number; characterId: number };
+
+const FAVORITES_API = "http://localhost:3001/favorites";
 
 async function getCharacters(query?: string): Promise<Character[]> {
   const response = await getCharactersFromClient(
@@ -46,16 +49,22 @@ export default function Home() {
   const characterGridRef = useRef<HTMLUListElement | null>(null);
 
   useEffect(() => {
-    const cached = window.localStorage.getItem("rm-favorites");
-    if (!cached) {
-      return;
-    }
+    const loadFavorites = async () => {
+      try {
+        const response = await fetch(FAVORITES_API);
 
-    try {
-      setFavorites(JSON.parse(cached) as number[]);
-    } catch {
-      setFavorites([]);
-    }
+        if (!response.ok) {
+          throw new Error("Could not load favorites");
+        }
+
+        const data = (await response.json()) as FavoriteRecord[];
+        setFavorites(data.map((item) => item.characterId));
+      } catch {
+        setFavorites([]);
+      }
+    };
+
+    void loadFavorites();
   }, []);
 
   useEffect(() => {
@@ -102,15 +111,49 @@ export default function Home() {
     }
   }, [characters, selected]);
 
-  const toggleFavorite = (characterId: number) => {
-    setFavorites((current) => {
-      const next = current.includes(characterId)
-        ? current.filter((id) => id !== characterId)
-        : [...current, characterId];
+  const toggleFavorite = async (characterId: number) => {
+    const isFavorite = favorites.includes(characterId);
 
-      window.localStorage.setItem("rm-favorites", JSON.stringify(next));
-      return next;
-    });
+    try {
+      if (isFavorite) {
+        const existingResponse = await fetch(
+          `${FAVORITES_API}?characterId=${characterId}`,
+        );
+
+        if (!existingResponse.ok) {
+          throw new Error("Could not remove favorite");
+        }
+
+        const existing = (await existingResponse.json()) as FavoriteRecord[];
+        await Promise.all(
+          existing.map((item) =>
+            fetch(`${FAVORITES_API}/${item.id}`, {
+              method: "DELETE",
+            }),
+          ),
+        );
+      } else {
+        const createResponse = await fetch(FAVORITES_API, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ characterId }),
+        });
+
+        if (!createResponse.ok) {
+          throw new Error("Could not add favorite");
+        }
+      }
+
+      setFavorites((current) =>
+        isFavorite
+          ? current.filter((id) => id !== characterId)
+          : [...current, characterId],
+      );
+    } catch {
+      // Keep UI responsive even if mock API is not running.
+    }
   };
 
   const scrollCharacters = (direction: "up" | "down") => {
@@ -236,7 +279,7 @@ export default function Home() {
                         }`}
                         onClick={(event) => {
                           event.stopPropagation();
-                          toggleFavorite(character.id);
+                          void toggleFavorite(character.id);
                         }}
                       >
                         <FiHeart aria-hidden="true" />

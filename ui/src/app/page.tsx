@@ -1,64 +1,244 @@
+"use client";
+
 import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import {
+  getCharacters as getCharactersFromClient,
+  type Character as ApiCharacter,
+  type Info,
+} from "rickmortyapi";
+import styles from "./page.module.css";
+
+type Character = ApiCharacter;
+
+async function getCharacters(query: string): Promise<Character[]> {
+  const response = await getCharactersFromClient({
+    name: query,
+    page: 1,
+  });
+
+  if (response.status === 404) {
+    return [];
+  }
+
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(response.statusMessage || "Could not load characters");
+  }
+
+  const data = response.data as Info<Character[]>;
+  return data.results ?? [];
+}
 
 export default function Home() {
+  const [nameFilter, setNameFilter] = useState("");
+  const [quickFilter, setQuickFilter] = useState<"rick" | "morty">("rick");
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [favorites, setFavorites] = useState<number[]>([]);
+
+  useEffect(() => {
+    const cached = window.localStorage.getItem("rm-favorites");
+    if (!cached) {
+      return;
+    }
+
+    try {
+      setFavorites(JSON.parse(cached) as number[]);
+    } catch {
+      setFavorites([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(async () => {
+      const query = nameFilter.trim() || quickFilter;
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const data = await getCharacters(query);
+        setCharacters(data.slice(0, 8));
+        setSelectedId((current) => current ?? data[0]?.id ?? null);
+      } catch (requestError) {
+        setCharacters([]);
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unexpected error",
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [nameFilter, quickFilter]);
+
+  const selected = useMemo(() => {
+    if (!characters.length) {
+      return null;
+    }
+
+    return (
+      characters.find((character) => character.id === selectedId) ??
+      characters[0] ??
+      null
+    );
+  }, [characters, selectedId]);
+
+  useEffect(() => {
+    if (!selected && characters[0]) {
+      setSelectedId(characters[0].id);
+    }
+  }, [characters, selected]);
+
+  const toggleFavorite = (characterId: number) => {
+    setFavorites((current) => {
+      const next = current.includes(characterId)
+        ? current.filter((id) => id !== characterId)
+        : [...current, characterId];
+
+      window.localStorage.setItem("rm-favorites", JSON.stringify(next));
+      return next;
+    });
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+    <div className={styles.page}>
+      <h1 className={styles.brand}>Rick and Morty</h1>
+
+      <main className={styles.dashboard}>
+        <section className={styles.leftPanel}>
+          {selected ? (
+            <>
+              <div className={styles.liveBadge}>
+                <span className={styles.liveDot} />
+                LIVE
+              </div>
+
+              <Image
+                src={selected.image}
+                alt={selected.name}
+                fill
+                priority
+                className={styles.heroImage}
+                sizes="(max-width: 980px) 100vw, 65vw"
+              />
+
+              <div className={styles.heroOverlay}>
+                <h2 className={styles.heroName}>{selected.name}</h2>
+                <p className={styles.heroMetaPrimary}>{selected.species}</p>
+                <p className={styles.heroMetaSecondary}>
+                  {selected.location.name}
+                </p>
+
+                <ul className={styles.stats}>
+                  <li>
+                    <span className={styles.statsLabel}>Origin</span>
+                    <span className={styles.statsValue}>
+                      {selected.origin.name}
+                    </span>
+                  </li>
+                  <li>
+                    <span className={styles.statsLabel}>Location</span>
+                    <span className={styles.statsValue}>
+                      {selected.location.name}
+                    </span>
+                  </li>
+                  <li>
+                    <span className={styles.statsLabel}>Gender</span>
+                    <span className={styles.statsValue}>{selected.gender}</span>
+                  </li>
+                  <li>
+                    <span className={styles.statsLabel}>Episodes</span>
+                    <span className={styles.statsValue}>
+                      {selected.episode.length}
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </>
+          ) : (
+            <p className={styles.status}>No character selected</p>
+          )}
+        </section>
+
+        <aside className={styles.rightPanel}>
+          <div className={styles.searchWrap}>
+            <span className={styles.searchIcon}>Q</span>
+            <input
+              className={styles.search}
+              placeholder="Find your character..."
+              value={nameFilter}
+              onChange={(event) => setNameFilter(event.target.value)}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+          </div>
+
+          <div className={styles.tabRow}>
+            <button
+              type="button"
+              className={`${styles.tab} ${
+                quickFilter === "rick" ? styles.tabActive : ""
+              }`}
+              onClick={() => setQuickFilter("rick")}
+            >
+              RICK
+            </button>
+            <button
+              type="button"
+              className={`${styles.tab} ${
+                quickFilter === "morty" ? styles.tabActive : ""
+              }`}
+              onClick={() => setQuickFilter("morty")}
+            >
+              MORTY
+            </button>
+          </div>
+
+          {isLoading ? (
+            <p className={styles.status}>Loading characters...</p>
+          ) : null}
+          {error ? <p className={styles.error}>{error}</p> : null}
+
+          {!isLoading && !error ? (
+            <ul className={styles.characterGrid}>
+              {characters.map((character) => {
+                const isFavorite = favorites.includes(character.id);
+
+                return (
+                  <li
+                    key={character.id}
+                    className={`${styles.characterCard} ${
+                      selected?.id === character.id ? styles.activeCard : ""
+                    }`}
+                    onClick={() => setSelectedId(character.id)}
+                  >
+                    <h3 className={styles.cardName}>{character.name}</h3>
+                    <img
+                      src={character.image}
+                      alt={character.name}
+                      className={styles.cardThumb}
+                    />
+                    <button
+                      type="button"
+                      className={`${styles.likeBtn} ${
+                        isFavorite ? styles.likeActive : ""
+                      }`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleFavorite(character.id);
+                      }}
+                    >
+                      {isFavorite ? "<3 Liked" : "<3 Like"}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </aside>
       </main>
     </div>
   );

@@ -1,6 +1,6 @@
 {
   "name": "rickmortyapi",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "author": "Axel Fuhrmann",
   "description": "The Rick and Morty API JS client",
   "license": "MIT",
@@ -22,7 +22,7 @@
     "docs:watch": "npm run docs -- --watch --preserveWatchOutput",
     "doctoc": "doctoc README.md",
     "release": "standard-version",
-    "prepare": "husky install"
+    "prepare": "node -e \"const fs=require('fs');if(fs.existsSync('.git')){require('child_process').execSync('husky install',{stdio:'inherit'});}\""
   },
   "devDependencies": {
     "@commitlint/cli": "^17.3.0",

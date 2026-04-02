@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FiChevronDown, FiChevronUp, FiHeart, FiSearch } from "react-icons/fi";
 import {
   getCharacters as getCharactersFromClient,
   type Character as ApiCharacter,
@@ -11,11 +12,17 @@ import styles from "./page.module.css";
 
 type Character = ApiCharacter;
 
-async function getCharacters(query: string): Promise<Character[]> {
-  const response = await getCharactersFromClient({
-    name: query,
-    page: 1,
-  });
+async function getCharacters(query?: string): Promise<Character[]> {
+  const response = await getCharactersFromClient(
+    query
+      ? {
+          name: query,
+          page: 1,
+        }
+      : {
+          page: 1,
+        },
+  );
 
   if (response.status === 404) {
     return [];
@@ -31,12 +38,12 @@ async function getCharacters(query: string): Promise<Character[]> {
 
 export default function Home() {
   const [nameFilter, setNameFilter] = useState("");
-  const [quickFilter, setQuickFilter] = useState<"rick" | "morty">("rick");
   const [characters, setCharacters] = useState<Character[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<number[]>([]);
+  const characterGridRef = useRef<HTMLUListElement | null>(null);
 
   useEffect(() => {
     const cached = window.localStorage.getItem("rm-favorites");
@@ -53,7 +60,8 @@ export default function Home() {
 
   useEffect(() => {
     const timeout = window.setTimeout(async () => {
-      const query = nameFilter.trim() || quickFilter;
+      const query = nameFilter.trim();
+
       setIsLoading(true);
       setError(null);
 
@@ -74,7 +82,7 @@ export default function Home() {
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [nameFilter, quickFilter]);
+  }, [nameFilter]);
 
   const selected = useMemo(() => {
     if (!characters.length) {
@@ -105,10 +113,19 @@ export default function Home() {
     });
   };
 
+  const scrollCharacters = (direction: "up" | "down") => {
+    if (!characterGridRef.current) {
+      return;
+    }
+
+    characterGridRef.current.scrollBy({
+      top: direction === "up" ? -240 : 240,
+      behavior: "smooth",
+    });
+  };
+
   return (
     <div className={styles.page}>
-      <h1 className={styles.brand}>Rick and Morty</h1>
-
       <main className={styles.dashboard}>
         <section className={styles.leftPanel}>
           {selected ? (
@@ -131,7 +148,7 @@ export default function Home() {
                 <h2 className={styles.heroName}>{selected.name}</h2>
                 <p className={styles.heroMetaPrimary}>{selected.species}</p>
                 <p className={styles.heroMetaSecondary}>
-                  {selected.location.name}
+                  {selected.type || selected.location.name}
                 </p>
 
                 <ul className={styles.stats}>
@@ -167,7 +184,9 @@ export default function Home() {
 
         <aside className={styles.rightPanel}>
           <div className={styles.searchWrap}>
-            <span className={styles.searchIcon}>Q</span>
+            <span className={styles.searchIcon}>
+              <FiSearch aria-hidden="true" />
+            </span>
             <input
               className={styles.search}
               placeholder="Find your character..."
@@ -176,67 +195,71 @@ export default function Home() {
             />
           </div>
 
-          <div className={styles.tabRow}>
-            <button
-              type="button"
-              className={`${styles.tab} ${
-                quickFilter === "rick" ? styles.tabActive : ""
-              }`}
-              onClick={() => setQuickFilter("rick")}
-            >
-              RICK
-            </button>
-            <button
-              type="button"
-              className={`${styles.tab} ${
-                quickFilter === "morty" ? styles.tabActive : ""
-              }`}
-              onClick={() => setQuickFilter("morty")}
-            >
-              MORTY
-            </button>
-          </div>
-
           {isLoading ? (
             <p className={styles.status}>Loading characters...</p>
           ) : null}
           {error ? <p className={styles.error}>{error}</p> : null}
 
           {!isLoading && !error ? (
-            <ul className={styles.characterGrid}>
-              {characters.map((character) => {
-                const isFavorite = favorites.includes(character.id);
+            <>
+              <button
+                type="button"
+                className={`${styles.scrollButton} ${styles.scrollButtonTop}`}
+                onClick={() => scrollCharacters("up")}
+                aria-label="Scroll up"
+              >
+                <FiChevronUp aria-hidden="true" />
+              </button>
 
-                return (
-                  <li
-                    key={character.id}
-                    className={`${styles.characterCard} ${
-                      selected?.id === character.id ? styles.activeCard : ""
-                    }`}
-                    onClick={() => setSelectedId(character.id)}
-                  >
-                    <h3 className={styles.cardName}>{character.name}</h3>
-                    <img
-                      src={character.image}
-                      alt={character.name}
-                      className={styles.cardThumb}
-                    />
-                    <button
-                      type="button"
-                      className={`${styles.likeBtn} ${
-                        isFavorite ? styles.likeActive : ""
+              <ul ref={characterGridRef} className={styles.characterGrid}>
+                {characters.map((character) => {
+                  const isFavorite = favorites.includes(character.id);
+
+                  return (
+                    <li
+                      key={character.id}
+                      className={`${styles.characterCard} ${
+                        selected?.id === character.id ? styles.activeCard : ""
                       }`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        toggleFavorite(character.id);
-                      }}
+                      onClick={() => setSelectedId(character.id)}
                     >
-                      {isFavorite ? "<3 Liked" : "<3 Like"}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                      <h3 className={styles.cardName}>{character.name}</h3>
+                      <img
+                        src={character.image}
+                        alt={character.name}
+                        className={styles.cardThumb}
+                      />
+                      <button
+                        type="button"
+                        className={`${styles.likeBtn} ${
+                          isFavorite ? styles.likeActive : ""
+                        }`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleFavorite(character.id);
+                        }}
+                      >
+                        <FiHeart aria-hidden="true" />
+                        <span>Like</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <button
+                type="button"
+                className={`${styles.scrollButton} ${styles.scrollButtonBottom}`}
+                onClick={() => scrollCharacters("down")}
+                aria-label="Scroll down"
+              >
+                <FiChevronDown aria-hidden="true" />
+              </button>
+
+              <button type="button" className={styles.favsButton}>
+                FAVS
+              </button>
+            </>
           ) : null}
         </aside>
       </main>

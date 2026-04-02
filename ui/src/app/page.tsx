@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FiChevronDown,
+  FiChevronLeft,
+  FiChevronRight,
   FiChevronUp,
   FiHeart,
   FiSearch,
@@ -298,12 +300,60 @@ export default function Home() {
     };
   }, [selected?.status]);
 
+  const selectedListIndex = useMemo(() => {
+    if (!selected) {
+      return -1;
+    }
+
+    return characters.findIndex((character) => character.id === selected.id);
+  }, [characters, selected]);
+
+  const canSelectPrevious = selectedListIndex > 0;
+  const canSelectNext =
+    selectedListIndex !== -1 && selectedListIndex < characters.length - 1;
+
+  const selectAdjacentCharacter = (direction: "left" | "right") => {
+    if (!selected || selectedListIndex === -1) {
+      return;
+    }
+
+    const nextIndex =
+      direction === "left" ? selectedListIndex - 1 : selectedListIndex + 1;
+    const nextCharacter = characters[nextIndex];
+
+    if (!nextCharacter) {
+      return;
+    }
+
+    handleSelectCharacter(nextCharacter);
+  };
+
   return (
     <div className={styles.page}>
       <main className={styles.dashboard}>
         <section className={styles.leftPanel}>
           {selected ? (
             <>
+              <button
+                type="button"
+                className={`${styles.mobileCharacterNav} ${styles.mobileCharacterNavLeft}`}
+                onClick={() => selectAdjacentCharacter("left")}
+                disabled={!canSelectPrevious}
+                aria-label="Seleccionar personaje anterior"
+              >
+                <FiChevronLeft aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                className={`${styles.mobileCharacterNav} ${styles.mobileCharacterNavRight}`}
+                onClick={() => selectAdjacentCharacter("right")}
+                disabled={!canSelectNext}
+                aria-label="Seleccionar siguiente personaje"
+              >
+                <FiChevronRight aria-hidden="true" />
+              </button>
+
               <div className={styles.liveBadge}>
                 <span
                   className={`${styles.liveDot} ${

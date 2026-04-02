@@ -8,12 +8,15 @@ import {
   type Character as ApiCharacter,
   type Info,
 } from "rickmortyapi";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import {
+  loadFavoritesRequest,
+  selectFavoriteIds,
+  toggleFavoriteRequest,
+} from "../store/favoritesSlice";
 import styles from "./page.module.css";
 
 type Character = ApiCharacter;
-type FavoriteRecord = { id: number; characterId: number };
-
-const FAVORITES_API = "http://localhost:3001/favorites";
 
 async function getCharacters(query?: string): Promise<Character[]> {
   const response = await getCharactersFromClient(
@@ -40,32 +43,18 @@ async function getCharacters(query?: string): Promise<Character[]> {
 }
 
 export default function Home() {
+  const dispatch = useAppDispatch();
   const [nameFilter, setNameFilter] = useState("");
   const [characters, setCharacters] = useState<Character[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [favorites, setFavorites] = useState<number[]>([]);
+  const favorites = useAppSelector(selectFavoriteIds);
   const characterGridRef = useRef<HTMLUListElement | null>(null);
 
   useEffect(() => {
-    const loadFavorites = async () => {
-      try {
-        const response = await fetch(FAVORITES_API);
-
-        if (!response.ok) {
-          throw new Error("Could not load favorites");
-        }
-
-        const data = (await response.json()) as FavoriteRecord[];
-        setFavorites(data.map((item) => item.characterId));
-      } catch {
-        setFavorites([]);
-      }
-    };
-
-    void loadFavorites();
-  }, []);
+    dispatch(loadFavoritesRequest());
+  }, [dispatch]);
 
   useEffect(() => {
     const timeout = window.setTimeout(async () => {
@@ -111,49 +100,8 @@ export default function Home() {
     }
   }, [characters, selected]);
 
-  const toggleFavorite = async (characterId: number) => {
-    const isFavorite = favorites.includes(characterId);
-
-    try {
-      if (isFavorite) {
-        const existingResponse = await fetch(
-          `${FAVORITES_API}?characterId=${characterId}`,
-        );
-
-        if (!existingResponse.ok) {
-          throw new Error("Could not remove favorite");
-        }
-
-        const existing = (await existingResponse.json()) as FavoriteRecord[];
-        await Promise.all(
-          existing.map((item) =>
-            fetch(`${FAVORITES_API}/${item.id}`, {
-              method: "DELETE",
-            }),
-          ),
-        );
-      } else {
-        const createResponse = await fetch(FAVORITES_API, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ characterId }),
-        });
-
-        if (!createResponse.ok) {
-          throw new Error("Could not add favorite");
-        }
-      }
-
-      setFavorites((current) =>
-        isFavorite
-          ? current.filter((id) => id !== characterId)
-          : [...current, characterId],
-      );
-    } catch {
-      // Keep UI responsive even if mock API is not running.
-    }
+  const toggleFavorite = (characterId: number) => {
+    dispatch(toggleFavoriteRequest(characterId));
   };
 
   const scrollCharacters = (direction: "up" | "down") => {
@@ -167,6 +115,20 @@ export default function Home() {
     });
   };
 
+  const { statusBadgeText, isDeadStatus } = useMemo(() => {
+    const badgeText =
+      selected?.status === "Dead"
+        ? "DEAD"
+        : selected?.status === "Alive"
+          ? "LIVE"
+          : "UNKNOWN";
+
+    return {
+      statusBadgeText: badgeText,
+      isDeadStatus: badgeText === "DEAD",
+    };
+  }, [selected?.status]);
+
   return (
     <div className={styles.page}>
       <main className={styles.dashboard}>
@@ -174,8 +136,12 @@ export default function Home() {
           {selected ? (
             <>
               <div className={styles.liveBadge}>
-                <span className={styles.liveDot} />
-                LIVE
+                <span
+                  className={`${styles.liveDot} ${
+                    isDeadStatus ? styles.deadDot : ""
+                  }`}
+                />
+                {statusBadgeText}
               </div>
 
               <Image
@@ -267,9 +233,11 @@ export default function Home() {
                       onClick={() => setSelectedId(character.id)}
                     >
                       <h3 className={styles.cardName}>{character.name}</h3>
-                      <img
+                      <Image
                         src={character.image}
                         alt={character.name}
+                        width={132}
+                        height={132}
                         className={styles.cardThumb}
                       />
                       <button
@@ -279,7 +247,7 @@ export default function Home() {
                         }`}
                         onClick={(event) => {
                           event.stopPropagation();
-                          void toggleFavorite(character.id);
+                          toggleFavorite(character.id);
                         }}
                       >
                         <FiHeart aria-hidden="true" />

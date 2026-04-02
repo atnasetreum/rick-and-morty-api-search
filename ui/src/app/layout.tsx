@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Audiowide, Rajdhani } from "next/font/google";
+import { Providers } from "./providers";
 import "./globals.css";
 
 const headingFont = Audiowide({
@@ -31,7 +32,7 @@ export default function RootLayout({
       className={`${headingFont.variable} ${bodyFont.variable} h-full antialiased`}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

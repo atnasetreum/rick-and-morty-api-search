@@ -24,7 +24,8 @@ import {
 import styles from "./page.module.css";
 
 type Character = ApiCharacter;
-const SELECTED_CHARACTER_URL = "http://localhost:4000/selectedCharacter";
+const JSON_SERVER_PORT = process.env.NEXT_PUBLIC_JSON_SERVER_PORT ?? "4000";
+const SELECTED_CHARACTER_URL = `http://localhost:${JSON_SERVER_PORT}/selectedCharacter`;
 
 type SelectedCharacterPayload = {
   id: number;

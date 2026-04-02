@@ -24,6 +24,39 @@ import {
 import styles from "./page.module.css";
 
 type Character = ApiCharacter;
+const SELECTED_CHARACTER_URL = "http://localhost:4000/selectedCharacter";
+
+type SelectedCharacterPayload = {
+  id: number;
+  characterId: number | null;
+  character: Character | null;
+};
+
+async function loadSelectedCharacter(): Promise<SelectedCharacterPayload | null> {
+  const response = await fetch(SELECTED_CHARACTER_URL);
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return (await response.json()) as SelectedCharacterPayload;
+}
+
+async function saveSelectedCharacter(
+  character: Character | null,
+): Promise<void> {
+  await fetch(SELECTED_CHARACTER_URL, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      id: 1,
+      characterId: character?.id ?? null,
+      character,
+    }),
+  });
+}
 
 async function getCharacters(query?: string): Promise<Character[]> {
   const response = await getCharactersFromClient(
@@ -56,6 +89,9 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(
+    null,
+  );
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
   const [favoriteCharacters, setFavoriteCharacters] = useState<Character[]>([]);
   const favorites = useAppSelector(selectFavoriteIds);
@@ -68,6 +104,20 @@ export default function Home() {
   }, [dispatch]);
 
   useEffect(() => {
+    const clearSelectedCharacter = async () => {
+      try {
+        setSelectedId(null);
+        setSelectedCharacter(null);
+        await saveSelectedCharacter(null);
+      } catch {
+        // If json-server is unavailable, the app keeps running with local state.
+      }
+    };
+
+    void clearSelectedCharacter();
+  }, []);
+
+  useEffect(() => {
     const timeout = window.setTimeout(async () => {
       const query = nameFilter.trim();
 
@@ -76,8 +126,50 @@ export default function Home() {
 
       try {
         const data = await getCharacters(query);
-        setCharacters(data.slice(0, 8));
-        setSelectedId((current) => current ?? data[0]?.id ?? null);
+        const limitedData = data.slice(0, 8);
+        setCharacters(limitedData);
+
+        const storedSelection = await loadSelectedCharacter();
+        const storedCharacterId =
+          storedSelection && typeof storedSelection.characterId === "number"
+            ? storedSelection.characterId
+            : null;
+
+        if (
+          storedCharacterId !== null &&
+          limitedData.some((character) => character.id === storedCharacterId)
+        ) {
+          const matchedCharacter =
+            limitedData.find(
+              (character) => character.id === storedCharacterId,
+            ) ?? null;
+          setSelectedId(storedCharacterId);
+          setSelectedCharacter(matchedCharacter);
+        } else if (storedSelection?.character) {
+          setSelectedId(storedSelection.character.id);
+          setSelectedCharacter(storedSelection.character);
+        } else {
+          setSelectedId((current) => {
+            if (current === null) {
+              return null;
+            }
+
+            return limitedData.some((character) => character.id === current)
+              ? current
+              : null;
+          });
+
+          setSelectedCharacter((current) => {
+            if (!current) {
+              return null;
+            }
+
+            return (
+              limitedData.find((character) => character.id === current.id) ??
+              current
+            );
+          });
+        }
       } catch (requestError) {
         setCharacters([]);
         setError(
@@ -94,22 +186,16 @@ export default function Home() {
   }, [nameFilter]);
 
   const selected = useMemo(() => {
-    if (!characters.length) {
+    if (selectedCharacter) {
+      return selectedCharacter;
+    }
+
+    if (!characters.length || selectedId === null) {
       return null;
     }
 
-    return (
-      characters.find((character) => character.id === selectedId) ??
-      characters[0] ??
-      null
-    );
-  }, [characters, selectedId]);
-
-  useEffect(() => {
-    if (!selected && characters[0]) {
-      setSelectedId(characters[0].id);
-    }
-  }, [characters, selected]);
+    return characters.find((character) => character.id === selectedId) ?? null;
+  }, [characters, selectedCharacter, selectedId]);
 
   useEffect(() => {
     const loadFavoriteCharacters = async () => {
@@ -178,6 +264,15 @@ export default function Home() {
 
   const toggleFavorite = (characterId: number) => {
     dispatch(toggleFavoriteRequest(characterId));
+  };
+
+  const handleSelectCharacter = (character: Character) => {
+    setSelectedId(character.id);
+    setSelectedCharacter(character);
+
+    void saveSelectedCharacter(character).catch(() => {
+      // Ignore persistence failures to keep selection interaction responsive.
+    });
   };
 
   const scrollCharacters = (direction: "up" | "down") => {
@@ -303,7 +398,7 @@ export default function Home() {
                       className={`${styles.characterCard} ${
                         selected?.id === character.id ? styles.activeCard : ""
                       }`}
-                      onClick={() => setSelectedId(character.id)}
+                      onClick={() => handleSelectCharacter(character)}
                     >
                       <h3 className={styles.cardName}>{character.name}</h3>
                       <Image

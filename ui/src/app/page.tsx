@@ -123,6 +123,7 @@ export default function Home() {
   useEffect(() => {
     const timeout = window.setTimeout(async () => {
       const query = nameFilter.trim();
+      const normalizedQuery = query.toLowerCase();
 
       setIsLoading(true);
       setError(null);
@@ -131,6 +132,21 @@ export default function Home() {
         const data = await getCharacters(query);
         const limitedData = data.slice(0, 8);
         setCharacters(limitedData);
+
+        const exactSingleMatch =
+          limitedData.length === 1 &&
+          normalizedQuery.length > 0 &&
+          limitedData[0].name.toLowerCase() === normalizedQuery;
+
+        if (exactSingleMatch) {
+          const [singleCharacter] = limitedData;
+          setSelectedId(singleCharacter.id);
+          setSelectedCharacter(singleCharacter);
+          void saveSelectedCharacter(singleCharacter).catch(() => {
+            // Ignore persistence failures to keep selection interaction responsive.
+          });
+          return;
+        }
 
         const storedSelection = await loadSelectedCharacter();
         const storedCharacterId =
@@ -308,6 +324,16 @@ export default function Home() {
     return characters.findIndex((character) => character.id === selected.id);
   }, [characters, selected]);
 
+  const isSingleExactMatch = useMemo(() => {
+    const query = nameFilter.trim().toLowerCase();
+
+    if (!query || characters.length !== 1) {
+      return false;
+    }
+
+    return characters[0].name.toLowerCase() === query;
+  }, [characters, nameFilter]);
+
   const canSelectPrevious = selectedListIndex > 0;
   const canSelectNext =
     selectedListIndex !== -1 && selectedListIndex < characters.length - 1;
@@ -334,25 +360,29 @@ export default function Home() {
         <section className={styles.leftPanel}>
           {selected ? (
             <>
-              <button
-                type="button"
-                className={`${styles.mobileCharacterNav} ${styles.mobileCharacterNavLeft}`}
-                onClick={() => selectAdjacentCharacter("left")}
-                disabled={!canSelectPrevious}
-                aria-label="Seleccionar personaje anterior"
-              >
-                <FiChevronLeft aria-hidden="true" />
-              </button>
+              {!isSingleExactMatch ? (
+                <>
+                  <button
+                    type="button"
+                    className={`${styles.mobileCharacterNav} ${styles.mobileCharacterNavLeft}`}
+                    onClick={() => selectAdjacentCharacter("left")}
+                    disabled={!canSelectPrevious}
+                    aria-label="Seleccionar personaje anterior"
+                  >
+                    <FiChevronLeft aria-hidden="true" />
+                  </button>
 
-              <button
-                type="button"
-                className={`${styles.mobileCharacterNav} ${styles.mobileCharacterNavRight}`}
-                onClick={() => selectAdjacentCharacter("right")}
-                disabled={!canSelectNext}
-                aria-label="Seleccionar siguiente personaje"
-              >
-                <FiChevronRight aria-hidden="true" />
-              </button>
+                  <button
+                    type="button"
+                    className={`${styles.mobileCharacterNav} ${styles.mobileCharacterNavRight}`}
+                    onClick={() => selectAdjacentCharacter("right")}
+                    disabled={!canSelectNext}
+                    aria-label="Seleccionar siguiente personaje"
+                  >
+                    <FiChevronRight aria-hidden="true" />
+                  </button>
+                </>
+              ) : null}
 
               <div className={styles.liveBadge}>
                 <span
@@ -430,14 +460,16 @@ export default function Home() {
 
           {!isLoading && !error ? (
             <>
-              <button
-                type="button"
-                className={`${styles.scrollButton} ${styles.scrollButtonTop}`}
-                onClick={() => scrollCharacters("up")}
-                aria-label="Scroll up"
-              >
-                <FiChevronUp aria-hidden="true" />
-              </button>
+              {!isSingleExactMatch ? (
+                <button
+                  type="button"
+                  className={`${styles.scrollButton} ${styles.scrollButtonTop}`}
+                  onClick={() => scrollCharacters("up")}
+                  aria-label="Scroll up"
+                >
+                  <FiChevronUp aria-hidden="true" />
+                </button>
+              ) : null}
 
               <ul ref={characterGridRef} className={styles.characterGrid}>
                 {characters.map((character) => {
@@ -477,14 +509,16 @@ export default function Home() {
                 })}
               </ul>
 
-              <button
-                type="button"
-                className={`${styles.scrollButton} ${styles.scrollButtonBottom}`}
-                onClick={() => scrollCharacters("down")}
-                aria-label="Scroll down"
-              >
-                <FiChevronDown aria-hidden="true" />
-              </button>
+              {!isSingleExactMatch ? (
+                <button
+                  type="button"
+                  className={`${styles.scrollButton} ${styles.scrollButtonBottom}`}
+                  onClick={() => scrollCharacters("down")}
+                  aria-label="Scroll down"
+                >
+                  <FiChevronDown aria-hidden="true" />
+                </button>
+              ) : null}
 
               <button
                 type="button"

@@ -1,16 +1,6 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  FiChevronDown,
-  FiChevronLeft,
-  FiChevronRight,
-  FiChevronUp,
-  FiHeart,
-  FiSearch,
-  FiTrash2,
-} from "react-icons/fi";
 import { type Character as ApiCharacter } from "rickmortyapi";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import {
@@ -26,6 +16,10 @@ import {
   fetchCharacters,
   fetchFavoriteCharacters,
 } from "../lib/rickmortyClient";
+import { CharacterGrid } from "../components/CharacterGrid";
+import { CharacterHero } from "../components/CharacterHero";
+import { CharacterSearchBar } from "../components/CharacterSearchBar";
+import { FavoritesDrawer } from "../components/FavoritesDrawer";
 import styles from "./page.module.css";
 
 type Character = ApiCharacter;
@@ -315,101 +309,18 @@ export default function Home() {
   return (
     <div className={styles.page}>
       <main className={styles.dashboard}>
-        <section className={styles.leftPanel}>
-          {selected ? (
-            <>
-              {!isSingleExactMatch ? (
-                <>
-                  <button
-                    type="button"
-                    className={`${styles.mobileCharacterNav} ${styles.mobileCharacterNavLeft}`}
-                    onClick={() => selectAdjacentCharacter("left")}
-                    disabled={!canSelectPrevious}
-                    aria-label="Seleccionar personaje anterior"
-                  >
-                    <FiChevronLeft aria-hidden="true" />
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`${styles.mobileCharacterNav} ${styles.mobileCharacterNavRight}`}
-                    onClick={() => selectAdjacentCharacter("right")}
-                    disabled={!canSelectNext}
-                    aria-label="Seleccionar siguiente personaje"
-                  >
-                    <FiChevronRight aria-hidden="true" />
-                  </button>
-                </>
-              ) : null}
-
-              <div className={styles.liveBadge}>
-                <span
-                  className={`${styles.liveDot} ${
-                    isDeadStatus ? styles.deadDot : ""
-                  }`}
-                />
-                {statusBadgeText}
-              </div>
-
-              <Image
-                src={selected.image}
-                alt={selected.name}
-                fill
-                priority
-                className={styles.heroImage}
-                sizes="(max-width: 980px) 100vw, 65vw"
-              />
-
-              <div className={styles.heroOverlay}>
-                <h2 className={styles.heroName}>{selected.name}</h2>
-                <p className={styles.heroMetaPrimary}>{selected.species}</p>
-                <p className={styles.heroMetaSecondary}>
-                  {selected.type || selected.location.name}
-                </p>
-
-                <ul className={styles.stats}>
-                  <li>
-                    <span className={styles.statsLabel}>Origin</span>
-                    <span className={styles.statsValue}>
-                      {selected.origin.name}
-                    </span>
-                  </li>
-                  <li>
-                    <span className={styles.statsLabel}>Location</span>
-                    <span className={styles.statsValue}>
-                      {selected.location.name}
-                    </span>
-                  </li>
-                  <li>
-                    <span className={styles.statsLabel}>Gender</span>
-                    <span className={styles.statsValue}>{selected.gender}</span>
-                  </li>
-                  <li>
-                    <span className={styles.statsLabel}>Episodes</span>
-                    <span className={styles.statsValue}>
-                      {selected.episode.length}
-                    </span>
-                  </li>
-                </ul>
-              </div>
-            </>
-          ) : (
-            <p className={styles.status}>No character selected</p>
-          )}
-        </section>
+        <CharacterHero
+          selected={selected}
+          isSingleExactMatch={isSingleExactMatch}
+          canSelectPrevious={canSelectPrevious}
+          canSelectNext={canSelectNext}
+          onSelectAdjacent={selectAdjacentCharacter}
+          statusBadgeText={statusBadgeText}
+          isDeadStatus={isDeadStatus}
+        />
 
         <aside className={styles.rightPanel}>
-          <div className={styles.searchWrap}>
-            <span className={styles.searchIcon}>
-              <FiSearch aria-hidden="true" />
-            </span>
-            <input
-              className={styles.search}
-              placeholder="Find your character..."
-              value={nameFilter}
-              onChange={(event) => setNameFilter(event.target.value)}
-            />
-          </div>
+          <CharacterSearchBar value={nameFilter} onChange={setNameFilter} />
 
           {isLoading ? (
             <p className={styles.status}>Loading characters...</p>
@@ -418,100 +329,25 @@ export default function Home() {
 
           {!isLoading && !error ? (
             <>
-              {!isSingleExactMatch ? (
-                <button
-                  type="button"
-                  className={`${styles.scrollButton} ${styles.scrollButtonTop}`}
-                  onClick={() => scrollCharacters("up")}
-                  aria-label="Scroll up"
-                >
-                  <FiChevronUp aria-hidden="true" />
-                </button>
-              ) : null}
+              <CharacterGrid
+                characters={characters}
+                selectedId={selected?.id ?? null}
+                favorites={favorites}
+                isSingleExactMatch={isSingleExactMatch}
+                characterGridRef={characterGridRef}
+                onScroll={scrollCharacters}
+                onSelectCharacter={handleSelectCharacter}
+                onToggleFavorite={toggleFavorite}
+              />
 
-              <ul ref={characterGridRef} className={styles.characterGrid}>
-                {characters.map((character) => {
-                  const isFavorite = favorites.includes(character.id);
-
-                  return (
-                    <li
-                      key={character.id}
-                      className={`${styles.characterCard} ${
-                        selected?.id === character.id ? styles.activeCard : ""
-                      }`}
-                      onClick={() => handleSelectCharacter(character)}
-                    >
-                      <h3 className={styles.cardName}>{character.name}</h3>
-                      <Image
-                        src={character.image}
-                        alt={character.name}
-                        width={132}
-                        height={132}
-                        className={styles.cardThumb}
-                      />
-                      <button
-                        type="button"
-                        className={`${styles.likeBtn} ${
-                          isFavorite ? styles.likeActive : ""
-                        }`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleFavorite(character.id);
-                        }}
-                      >
-                        <FiHeart aria-hidden="true" />
-                        <span>Like</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {!isSingleExactMatch ? (
-                <button
-                  type="button"
-                  className={`${styles.scrollButton} ${styles.scrollButtonBottom}`}
-                  onClick={() => scrollCharacters("down")}
-                  aria-label="Scroll down"
-                >
-                  <FiChevronDown aria-hidden="true" />
-                </button>
-              ) : null}
-
-              <button
-                type="button"
-                className={styles.favsButton}
-                ref={favoritesButtonRef}
-                onClick={() => setIsFavoritesOpen((current) => !current)}
-              >
-                FAVS
-              </button>
-
-              {isFavoritesOpen ? (
-                <div className={styles.favsDropdown} ref={favoritesDropdownRef}>
-                  <ul className={styles.favsList}>
-                    {favoriteCharacters.length ? (
-                      favoriteCharacters.map((character) => (
-                        <li key={character.id} className={styles.favsItem}>
-                          <span className={styles.favsItemName}>
-                            {character.name.toUpperCase()}
-                          </span>
-                          <button
-                            type="button"
-                            className={styles.favsRemoveButton}
-                            onClick={() => toggleFavorite(character.id)}
-                            aria-label={`Quitar a ${character.name} de favoritos`}
-                          >
-                            <FiTrash2 aria-hidden="true" />
-                          </button>
-                        </li>
-                      ))
-                    ) : (
-                      <li className={styles.favsItem}>SIN FAVORITOS</li>
-                    )}
-                  </ul>
-                </div>
-              ) : null}
+              <FavoritesDrawer
+                isOpen={isFavoritesOpen}
+                favoritesButtonRef={favoritesButtonRef}
+                favoritesDropdownRef={favoritesDropdownRef}
+                favoriteCharacters={favoriteCharacters}
+                onToggleOpen={() => setIsFavoritesOpen((current) => !current)}
+                onToggleFavorite={toggleFavorite}
+              />
             </>
           ) : null}
         </aside>

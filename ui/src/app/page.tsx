@@ -11,29 +11,27 @@ import {
   FiSearch,
   FiTrash2,
 } from "react-icons/fi";
-import {
-  getCharacter as getCharacterFromClient,
-  getCharacters as getCharactersFromClient,
-  type Character as ApiCharacter,
-  type Info,
-} from "rickmortyapi";
+import { type Character as ApiCharacter } from "rickmortyapi";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import {
   loadFavoritesRequest,
   selectFavoriteIds,
   toggleFavoriteRequest,
 } from "../store/favoritesSlice";
+import {
+  buildSelectedCharacterUrl,
+  type SelectedCharacterPayload,
+} from "../lib/jsonServer";
+import {
+  fetchCharacters,
+  fetchFavoriteCharacters,
+} from "../lib/rickmortyClient";
 import styles from "./page.module.css";
 
 type Character = ApiCharacter;
-const JSON_SERVER_PORT = process.env.NEXT_PUBLIC_JSON_SERVER_PORT ?? "4000";
-const SELECTED_CHARACTER_URL = `http://localhost:${JSON_SERVER_PORT}/selectedCharacter`;
-
-type SelectedCharacterPayload = {
-  id: number;
-  characterId: number | null;
-  character: Character | null;
-};
+const SELECTED_CHARACTER_URL = buildSelectedCharacterUrl(
+  process.env.NEXT_PUBLIC_JSON_SERVER_PORT,
+);
 
 async function loadSelectedCharacter(): Promise<SelectedCharacterPayload | null> {
   const response = await fetch(SELECTED_CHARACTER_URL);
@@ -59,30 +57,6 @@ async function saveSelectedCharacter(
       character,
     }),
   });
-}
-
-async function getCharacters(query?: string): Promise<Character[]> {
-  const response = await getCharactersFromClient(
-    query
-      ? {
-          name: query,
-          page: 1,
-        }
-      : {
-          page: 1,
-        },
-  );
-
-  if (response.status === 404) {
-    return [];
-  }
-
-  if (response.status < 200 || response.status >= 300) {
-    throw new Error(response.statusMessage || "Could not load characters");
-  }
-
-  const data = response.data as Info<Character[]>;
-  return data.results ?? [];
 }
 
 export default function Home() {
@@ -129,7 +103,7 @@ export default function Home() {
       setError(null);
 
       try {
-        const data = await getCharacters(query);
+        const data = await fetchCharacters(query);
         const limitedData = data.slice(0, 8);
         setCharacters(limitedData);
 
@@ -224,23 +198,7 @@ export default function Home() {
       }
 
       try {
-        const response = await getCharacterFromClient(
-          favorites.length === 1 ? favorites[0] : favorites,
-        );
-
-        if (response.status < 200 || response.status >= 300) {
-          setFavoriteCharacters([]);
-          return;
-        }
-
-        const payload = response.data as Character | Character[];
-        const list = Array.isArray(payload) ? payload : [payload];
-        const ordered = favorites
-          .map((favoriteId) =>
-            list.find((character) => character.id === favoriteId),
-          )
-          .filter((character): character is Character => Boolean(character));
-
+        const ordered = await fetchFavoriteCharacters(favorites);
         setFavoriteCharacters(ordered);
       } catch {
         setFavoriteCharacters([]);

@@ -19,7 +19,7 @@ Instala dependencias.
 
 ```bash
 cd ../ui
-npm install
+npm ci
 ```
 
 ### Crea archivo de configuracion
